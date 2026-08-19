@@ -12,10 +12,6 @@ export type InventoryResult = {
 type Input = {
   tcin: string;
   storeId: string;
-  zip: string;
-  state: string;
-  latitude: number;
-  longitude: number;
 };
 
 function classify(
@@ -100,7 +96,6 @@ function searchPayload(
   if (!node || typeof node !== 'object') return null;
 
   if (Array.isArray(node)) {
-    // Prefer an entry explicitly belonging to the requested store.
     const exact = node.find((item) => getStoreId(item) === String(storeId));
 
     if (exact) {
@@ -143,7 +138,6 @@ function findInventory(
   payload: any,
   storeId: string
 ): { quantity: number | null; availability: string } {
-  // Known fulfillment structures first.
   const fulfillment =
     payload?.data?.product?.fulfillment ??
     payload?.data?.product?.fulfillment_options ??
@@ -169,18 +163,13 @@ function findInventory(
     }
   }
 
-  // Target changes response layouts periodically, so recursively inspect
-  // the response rather than relying on one rigid JSON structure.
   const recursive = searchPayload(payload, storeId);
 
   if (recursive) return recursive;
 
-  const rootQuantity = getQuantity(fulfillment);
-  const rootAvailability = getAvailability(fulfillment);
-
   return {
-    quantity: rootQuantity,
-    availability: rootAvailability,
+    quantity: getQuantity(fulfillment),
+    availability: getAvailability(fulfillment),
   };
 }
 
@@ -211,17 +200,8 @@ export async function fetchTargetInventory(
     pricing_store_id: input.storeId,
     scheduled_delivery_store_id: input.storeId,
     required_store_id: input.storeId,
-    zip: input.zip,
-    state: input.state,
-    latitude: String(input.latitude),
-    longitude: String(input.longitude),
   };
 
-  /*
-   * Target changes Redsky aggregation route names over time.
-   * We try the current web-style fulfillment routes first and retain
-   * older variants as fallbacks.
-   */
   const endpointPaths = [
     '/redsky_aggregations/v1/web/product_fulfillment_v1',
     '/redsky_aggregations/v1/web/product_fulfillment_and_variation_hierarchy_v1',
@@ -234,7 +214,6 @@ export async function fetchTargetInventory(
 
   for (const path of endpointPaths) {
     const params = new URLSearchParams(baseParams);
-
     const url = `https://redsky.target.com${path}?${params.toString()}`;
 
     attempted.push(path);
@@ -259,7 +238,6 @@ export async function fetchTargetInventory(
       }
 
       const payload = await res.json();
-
       const parsed = findInventory(payload, input.storeId);
 
       return {
