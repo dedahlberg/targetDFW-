@@ -31,7 +31,7 @@ export const products: Product[] = [
   // BIBIGO SINGLE SERVE
   { tcin: '93374362', brand: 'Bibigo', name: 'Beef & Vegetable Bibimbap Bowl', category: 'Single Serve Meal', casePrice: 25.92 },
   { tcin: '93374359', brand: 'Bibigo', name: 'Chicken & Vegetable Bibimbap Bowl', category: 'Single Serve Meal', casePrice: 25.92 },
-  { tcin: '93374365', brand: 'Bibigo', name: 'Beef & Vegetable Japchae Noodles', category: 'Single Serve Meal' },
+  { tcin: '93374365', brand: 'Bibigo', name: 'Beef & Vegetable Japchae Noodles', category: 'Single Serve Meal', casePrice: 25.92 },
   { tcin: '93374381', brand: 'Bibigo', name: 'Chicken & Vegetable Japchae Noodles', category: 'Single Serve Meal', casePrice: 25.92 },
   { tcin: '93374363', brand: 'Bibigo', name: 'Chicken Wonton Soup', category: 'Single Serve Meal' },
 
