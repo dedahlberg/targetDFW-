@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { stores } from '@/data/stores';
 import { products } from '@/data/products';
+import { getWeekStart, readOrderAdditions, saveOrderAddition } from '@/lib/orderTracking';
 
 type Row = {
   key: string;
@@ -40,6 +42,16 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [brandFilter, setBrandFilter] = useState('ALL');
   const [busy, setBusy] = useState(false);
+  const [casesByKey, setCasesByKey] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const weekStart = getWeekStart();
+    const map: Record<string, number> = {};
+    for (const record of readOrderAdditions().filter((r) => r.weekStart === weekStart)) {
+      map[`${record.storeId}-${record.tcin}`] = record.cases;
+    }
+    setCasesByKey(map);
+  }, []);
 
   const selectedStore = stores.find((s) => s.id === selectedStoreId);
 
@@ -73,6 +85,7 @@ export default function Home() {
   const inStockClass = inStockRate === null ? 'neutral' : inStockRate >= 98.5 ? 'rateGreen' : inStockRate >= 95 ? 'rateYellow' : 'rateRed';
 
   const brands = useMemo(() => Array.from(new Set(products.map((p) => p.brand))).sort(), []);
+  const selectedStoreCases = selectedRows.reduce((sum, r) => sum + (casesByKey[r.key] ?? 0), 0);
 
   async function refreshSelectedStore() {
     if (!selectedStoreId) return;
@@ -101,10 +114,24 @@ export default function Home() {
     setBusy(false);
   }
 
+  function setCases(row: Row, cases: number) {
+    saveOrderAddition({
+      storeId: row.storeId,
+      storeName: row.store,
+      city: row.city,
+      brand: row.brand,
+      product: row.product,
+      tcin: row.tcin,
+      cases,
+    });
+
+    setCasesByKey((current) => ({ ...current, [row.key]: cases }));
+  }
+
   function exportCsv() {
-    const header = ['Priority','Store','City','Brand','Product','TCIN','Reported Qty','Status','Availability','Fetched At','Error'];
+    const header = ['Priority','Store','City','Brand','Product','TCIN','Reported Qty','Status','Cases Added','Availability','Fetched At','Error'];
     const escape = (v: unknown) => `"${String(v ?? '').replaceAll('"', '""')}"`;
-    const body = filtered.map((r, idx) => [idx + 1,r.store,r.city,r.brand,r.product,r.tcin,r.quantity,r.status,r.availability,r.fetchedAt,r.error].map(escape).join(','));
+    const body = filtered.map((r, idx) => [idx + 1,r.store,r.city,r.brand,r.product,r.tcin,r.quantity,r.status,casesByKey[r.key] ?? 0,r.availability,r.fetchedAt,r.error].map(escape).join(','));
     const blob = new Blob([[header.join(','), ...body].join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -122,9 +149,12 @@ export default function Home() {
           <h1>Target In-Stock Command Center</h1>
           <p>Select one Target store, refresh it, then work the OOS and low inventory opportunities first.</p>
         </div>
-        <button className="primary" onClick={refreshSelectedStore} disabled={busy || !selectedStoreId}>
-          {busy ? 'Refreshing Store…' : 'Refresh Selected Store'}
-        </button>
+        <div className="headerActions">
+          <Link className="navButton" href="/orders">Case Additions Dashboard</Link>
+          <button className="primary" onClick={refreshSelectedStore} disabled={busy || !selectedStoreId}>
+            {busy ? 'Refreshing Store…' : 'Refresh Selected Store'}
+          </button>
+        </div>
       </header>
 
       <section className="controls">
@@ -158,6 +188,10 @@ export default function Home() {
             <strong>Delivery</strong>
             <span>{selectedStore.deliveryDays?.length ? selectedStore.deliveryDays.join(' / ') : 'Not loaded'}</span>
           </div>
+          <div>
+            <strong>Cases Added</strong>
+            <span>{selectedStoreCases} this week</span>
+          </div>
         </section>
       )}
 
@@ -174,7 +208,7 @@ export default function Home() {
 
       <section className="tableWrap">
         <table>
-          <thead><tr><th>#</th><th>Brand</th><th>Item</th><th>Category</th><th>TCIN</th><th>Qty</th><th>Status</th><th>Target Availability</th></tr></thead>
+          <thead><tr><th>#</th><th>Brand</th><th>Item</th><th>Category</th><th>TCIN</th><th>Qty</th><th>Status</th><th>Qty Ordered</th><th>Target Availability</th></tr></thead>
           <tbody>
             {filtered.map((r, idx) => {
               const product = products.find((p) => p.tcin === r.tcin);
@@ -183,6 +217,21 @@ export default function Home() {
                   <td>{idx + 1}</td><td>{r.brand}</td><td>{r.product}</td><td>{product?.category ?? ''}</td>
                   <td className="mono">{r.tcin}</td><td className="qty">{r.quantity ?? '—'}</td>
                   <td><span className={`pill ${r.status.toLowerCase()}`}>{r.status}</span></td>
+                  <td>
+                    <select
+                      className="caseSelect"
+                      aria-label={`Cases ordered for ${r.product}`}
+                      value={casesByKey[r.key] ?? 0}
+                      onChange={(e) => setCases(r, Number(e.target.value))}
+                    >
+                      <option value={0}>0</option>
+                      <option value={1}>1</option>
+                      <option value={2}>2</option>
+                      <option value={3}>3</option>
+                      <option value={4}>4</option>
+                      <option value={5}>5</option>
+                    </select>
+                  </td>
                   <td>{r.availability}{r.error && <small className="error">{r.error}</small>}</td>
                 </tr>
               );
@@ -191,7 +240,7 @@ export default function Home() {
         </table>
       </section>
 
-      <footer>Reported quantity is Target fulfillment data, not a guaranteed physical shelf count. API failures are never counted as zero on-hand.</footer>
+      <footer>Reported quantity is Target fulfillment data, not a guaranteed physical shelf count. Case additions are tracked by sales week in this browser.</footer>
     </main>
   );
 }
