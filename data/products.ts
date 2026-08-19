@@ -5,8 +5,186 @@ export type Product = {
   category: string;
 };
 
-// Replace/add TCINs in this file, or connect the next phase Product Master importer.
 export const products: Product[] = [
-  { tcin: '14758453', brand: 'Demo', name: 'Target API Test Item', category: 'Test' },
-  { tcin: '80130847', brand: 'Demo', name: 'Target API Test Item 2', category: 'Test' }
+  // RED BARON
+  {
+    tcin: '13374155',
+    brand: 'Red Baron',
+    name: 'Pepperoni French Bread Pizza 2pk',
+    category: 'French Bread Pizza'
+  },
+  {
+    tcin: '13374241',
+    brand: 'Red Baron',
+    name: 'Five Cheese & Garlic French Bread Pizza 2pk',
+    category: 'French Bread Pizza'
+  },
+  {
+    tcin: '13376391',
+    brand: 'Red Baron',
+    name: 'Supreme French Bread Pizza',
+    category: 'French Bread Pizza'
+  },
+  {
+    tcin: '13376389',
+    brand: 'Red Baron',
+    name: 'Pepperoni Classic Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '13333997',
+    brand: 'Red Baron',
+    name: 'Supreme Classic Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '13374407',
+    brand: 'Red Baron',
+    name: 'Four Meat Classic Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '13334001',
+    brand: 'Red Baron',
+    name: 'Special Deluxe Classic Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '13373589',
+    brand: 'Red Baron',
+    name: 'Pepperoni Thin Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '94194523',
+    brand: 'Red Baron',
+    name: 'Pepperoni Stuffed Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '87545526',
+    brand: 'Red Baron',
+    name: 'Fully Loaded Pepperoni Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '87545525',
+    brand: 'Red Baron',
+    name: "Fully Loaded Meat Lover's Pizza",
+    category: 'Frozen Pizza'
+  },
+
+  // FRESCHETTA
+  {
+    tcin: '13374368',
+    brand: 'Freschetta',
+    name: 'Pepperoni Naturally Rising Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '13376392',
+    brand: 'Freschetta',
+    name: 'Four Cheese Medley Naturally Rising Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '13333998',
+    brand: 'Freschetta',
+    name: 'Canadian Bacon & Pineapple Naturally Rising Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '13376464',
+    brand: 'Freschetta',
+    name: 'Pepperoni Brick Oven Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '13374416',
+    brand: 'Freschetta',
+    name: 'Five Cheese Brick Oven Crust Pizza',
+    category: 'Frozen Pizza'
+  },
+  {
+    tcin: '31168520',
+    brand: 'Freschetta',
+    name: 'Pepperoni Gluten Free Thin Crust Pizza',
+    category: 'Gluten Free Pizza'
+  },
+  {
+    tcin: '16222856',
+    brand: 'Freschetta',
+    name: 'Four Cheese Medley Gluten Free Thin Crust Pizza',
+    category: 'Gluten Free Pizza'
+  },
+
+  // BIBIGO SINGLE SERVE
+  {
+    tcin: '93374362',
+    brand: 'Bibigo',
+    name: 'Beef & Vegetable Bibimbap Bowl',
+    category: 'Single Serve Meal'
+  },
+  {
+    tcin: '93374359',
+    brand: 'Bibigo',
+    name: 'Chicken & Vegetable Bibimbap Bowl',
+    category: 'Single Serve Meal'
+  },
+  {
+    tcin: '93374365',
+    brand: 'Bibigo',
+    name: 'Beef & Vegetable Japchae Noodles',
+    category: 'Single Serve Meal'
+  },
+  {
+    tcin: '93374381',
+    brand: 'Bibigo',
+    name: 'Chicken & Vegetable Japchae Noodles',
+    category: 'Single Serve Meal'
+  },
+  {
+    tcin: '93374363',
+    brand: 'Bibigo',
+    name: 'Chicken Wonton Soup',
+    category: 'Single Serve Meal'
+  },
+
+  // BIBIGO DUMPLINGS / WONTONS / MANDU
+  {
+    tcin: '81251225',
+    brand: 'Bibigo',
+    name: 'Mandu Pork & Vegetable Dumplings 24oz',
+    category: 'Dumplings'
+  },
+  {
+    tcin: '81251223',
+    brand: 'Bibigo',
+    name: 'Mini Wontons Chicken & Vegetable 24oz',
+    category: 'Wontons'
+  },
+  {
+    tcin: '82001058',
+    brand: 'Bibigo',
+    name: 'Mini Wontons Pork & Vegetable 24oz',
+    category: 'Wontons'
+  },
+  {
+    tcin: '87544467',
+    brand: 'Bibigo',
+    name: 'Chicken & Vegetable Steamed Dumplings 6.6oz',
+    category: 'Steamed Dumplings'
+  },
+  {
+    tcin: '87604330',
+    brand: 'Bibigo',
+    name: 'Pork & Vegetable Steamed Dumplings 6.6oz',
+    category: 'Steamed Dumplings'
+  },
+  {
+    tcin: '87544470',
+    brand: 'Bibigo',
+    name: 'Spicy Chicken & Vegetable Crispy Dumpling Bites',
+    category: 'Dumplings'
+  }
 ];
