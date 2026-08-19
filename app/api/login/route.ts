@@ -8,9 +8,8 @@ async function digest(value: string) {
 
 export async function POST(request: Request) {
   const sitePassword = process.env.SITE_PASSWORD;
-  const authSecret = process.env.AUTH_SECRET;
 
-  if (!sitePassword || !authSecret) {
+  if (!sitePassword) {
     return NextResponse.json({ error: 'Site access is not configured yet.' }, { status: 503 });
   }
 
@@ -21,7 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Incorrect password.' }, { status: 401 });
   }
 
-  const token = await digest(`${sitePassword}:${authSecret}`);
+  const token = await digest(`targetdfw:${sitePassword}`);
   const response = NextResponse.json({ ok: true });
   response.cookies.set('targetdfw_auth', token, {
     httpOnly: true,
