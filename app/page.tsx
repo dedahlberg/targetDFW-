@@ -4,6 +4,18 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { stores } from '@/data/stores';
 import { products } from '@/data/products';
+import {
+  ADDITIONAL_REGION_STORES,
+  FORT_WORTH_REGION_IDS,
+  DALLAS_REGION_IDS,
+  AUSTIN_REGION_IDS,
+  SAN_ANTONIO_REGION_IDS,
+  WEST_TEXAS_REGION_IDS,
+  EAST_TEXAS_REGION_IDS,
+  SOUTH_TEXAS_REGION_IDS,
+  EAST_HOUSTON_REGION_IDS,
+  WEST_HOUSTON_REGION_IDS,
+} from '@/data/regions';
 import { getWeekStart, readOrderAdditions, saveOrderAddition } from '@/lib/orderTracking';
 
 type Row = {
@@ -21,12 +33,45 @@ type Row = {
   error?: string;
 };
 
-const FORT_WORTH_REGION = new Set([
-  '1339','1368','1395','1514','1517','1536','1765','1766','1770','1836','2042','2243',
-  '0758','0876','1116','1531','1922','1962','1981','2008','2278','2334','2425','2754','2907','2935','2939'
-]);
+const allStores = [...stores, ...ADDITIONAL_REGION_STORES];
 
-const initialRows: Row[] = stores.flatMap((store) =>
+const REGION_SETS: Record<string, Set<string>> = {
+  FORT_WORTH: FORT_WORTH_REGION_IDS,
+  DALLAS: DALLAS_REGION_IDS,
+  AUSTIN: AUSTIN_REGION_IDS,
+  SAN_ANTONIO: SAN_ANTONIO_REGION_IDS,
+  WEST_TEXAS: WEST_TEXAS_REGION_IDS,
+  EAST_TEXAS: EAST_TEXAS_REGION_IDS,
+  SOUTH_TEXAS: SOUTH_TEXAS_REGION_IDS,
+  EAST_HOUSTON: EAST_HOUSTON_REGION_IDS,
+  WEST_HOUSTON: WEST_HOUSTON_REGION_IDS,
+};
+
+const REGION_LABELS: Record<string, string> = {
+  FORT_WORTH: 'Fort Worth',
+  DALLAS: 'Dallas',
+  AUSTIN: 'Austin',
+  SAN_ANTONIO: 'San Antonio',
+  WEST_TEXAS: 'West Texas',
+  EAST_TEXAS: 'East Texas',
+  SOUTH_TEXAS: 'South Texas',
+  EAST_HOUSTON: 'East Houston',
+  WEST_HOUSTON: 'West Houston',
+};
+
+function storesForRegion(region: string) {
+  const set = REGION_SETS[region];
+  return set ? allStores.filter((s) => set.has(s.id)) : allStores;
+}
+
+function regionName(storeId: string) {
+  for (const [key, set] of Object.entries(REGION_SETS)) {
+    if (set.has(storeId)) return REGION_LABELS[key];
+  }
+  return 'Other / Unassigned';
+}
+
+const initialRows: Row[] = allStores.flatMap((store) =>
   products.map((product) => ({
     key: `${store.id}-${product.tcin}`,
     storeId: store.id,
@@ -46,7 +91,7 @@ const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD
 export default function Home() {
   const [rows, setRows] = useState(initialRows);
   const [regionFilter, setRegionFilter] = useState('ALL');
-  const [selectedStoreId, setSelectedStoreId] = useState(stores[0]?.id ?? '');
+  const [selectedStoreId, setSelectedStoreId] = useState(allStores[0]?.id ?? '');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [brandFilter, setBrandFilter] = useState('ALL');
   const [busy, setBusy] = useState(false);
@@ -61,12 +106,8 @@ export default function Home() {
     setCasesByKey(map);
   }, []);
 
-  const regionStores = useMemo(() => {
-    if (regionFilter === 'FORT_WORTH') return stores.filter((s) => FORT_WORTH_REGION.has(s.id));
-    return stores;
-  }, [regionFilter]);
-
-  const selectedStore = stores.find((s) => s.id === selectedStoreId);
+  const regionStores = useMemo(() => storesForRegion(regionFilter), [regionFilter]);
+  const selectedStore = allStores.find((s) => s.id === selectedStoreId);
 
   const filtered = useMemo(() =>
     rows
@@ -179,12 +220,20 @@ export default function Home() {
         <select value={regionFilter} onChange={(e) => {
           const region = e.target.value;
           setRegionFilter(region);
-          const nextStores = region === 'FORT_WORTH' ? stores.filter((s) => FORT_WORTH_REGION.has(s.id)) : stores;
+          const nextStores = storesForRegion(region);
           if (!nextStores.some((s) => s.id === selectedStoreId)) setSelectedStoreId(nextStores[0]?.id ?? '');
           setStatusFilter('ALL');
         }}>
           <option value="ALL">All regions</option>
           <option value="FORT_WORTH">Fort Worth Region</option>
+          <option value="DALLAS">Dallas Region</option>
+          <option value="AUSTIN">Austin Region</option>
+          <option value="SAN_ANTONIO">San Antonio Region</option>
+          <option value="WEST_TEXAS">West Texas Region</option>
+          <option value="EAST_TEXAS">East Texas Region</option>
+          <option value="SOUTH_TEXAS">South Texas Region</option>
+          <option value="EAST_HOUSTON">East Houston Region</option>
+          <option value="WEST_HOUSTON">West Houston Region</option>
         </select>
         <select value={selectedStoreId} onChange={(e) => { setSelectedStoreId(e.target.value); setStatusFilter('ALL'); }}>
           {regionStores.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.city}</option>)}
@@ -206,7 +255,7 @@ export default function Home() {
         <section className="storeCard">
           <div><strong>{selectedStore.name}</strong><span>{selectedStore.address}, {selectedStore.city}, {selectedStore.state}</span></div>
           <div><strong>Store ID {selectedStore.id}</strong><span>{products.length} tracked products</span></div>
-          <div><strong>Region</strong><span>{FORT_WORTH_REGION.has(selectedStore.id) ? 'Fort Worth' : 'Other / Unassigned'}</span></div>
+          <div><strong>Region</strong><span>{regionName(selectedStore.id)}</span></div>
           <div><strong>Delivery</strong><span>{selectedStore.deliveryDays?.length ? selectedStore.deliveryDays.join(' / ') : 'Not loaded'}</span></div>
           <div><strong>Cases Added</strong><span>{selectedStoreCases} this week</span></div>
           <div><strong>Added $</strong><span>{money.format(selectedStoreAddedValue)} this week</span></div>
