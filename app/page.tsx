@@ -34,6 +34,7 @@ type Row = {
 };
 
 const allStores = [...stores, ...ADDITIONAL_REGION_STORES];
+const DAY_ORDER = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 const REGION_SETS: Record<string, Set<string>> = {
   FORT_WORTH: FORT_WORTH_REGION_IDS,
@@ -64,6 +65,14 @@ function storesForRegion(region: string) {
   return set ? allStores.filter((s) => set.has(s.id)) : allStores;
 }
 
+function deliveryRank(days?: string[]) {
+  if (!days?.length) return 99;
+  return Math.min(...days.map((d) => {
+    const idx = DAY_ORDER.indexOf(d);
+    return idx === -1 ? 98 : idx;
+  }));
+}
+
 function regionName(storeId: string) {
   for (const [key, set] of Object.entries(REGION_SETS)) {
     if (set.has(storeId)) return REGION_LABELS[key];
@@ -91,6 +100,7 @@ const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD
 export default function Home() {
   const [rows, setRows] = useState(initialRows);
   const [regionFilter, setRegionFilter] = useState('ALL');
+  const [deliveryFilter, setDeliveryFilter] = useState('ALL');
   const [selectedStoreId, setSelectedStoreId] = useState(allStores[0]?.id ?? '');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [brandFilter, setBrandFilter] = useState('ALL');
@@ -106,13 +116,19 @@ export default function Home() {
     setCasesByKey(map);
   }, []);
 
-  const regionStores = useMemo(() => storesForRegion(regionFilter), [regionFilter]);
+  const regionStores = useMemo(() => {
+    const base = storesForRegion(regionFilter);
+    return base
+      .filter((s) => deliveryFilter === 'ALL' || s.deliveryDays?.includes(deliveryFilter))
+      .sort((a, b) => deliveryRank(a.deliveryDays) - deliveryRank(b.deliveryDays) || a.city.localeCompare(b.city) || a.name.localeCompare(b.name));
+  }, [regionFilter, deliveryFilter]);
+
   const selectedStore = allStores.find((s) => s.id === selectedStoreId);
 
   const filtered = useMemo(() =>
     rows
       .filter((r) => r.storeId === selectedStoreId)
-      .filter((r) => statusFilter === 'ALL' || r.status === statusFilter)
+      .filter((r) => statusFilter === 'ALL' || (statusFilter === 'NEEDS_ATTENTION' ? (r.status === 'OOS' || r.status === 'LOW') : r.status === statusFilter))
       .filter((r) => brandFilter === 'ALL' || r.brand === brandFilter)
       .sort((a, b) => {
         const aQty = a.quantity === null ? Number.POSITIVE_INFINITY : a.quantity;
@@ -206,7 +222,7 @@ export default function Home() {
         <div>
           <div className="eyebrow">STORE-LEVEL INVENTORY ACTION</div>
           <h1>Target In-Stock Command Center</h1>
-          <p>Select a region, choose a Target store, refresh it, then work the OOS and low inventory opportunities first.</p>
+          <p>Select a region and delivery day, then work the OOS and low inventory opportunities first.</p>
         </div>
         <div className="headerActions">
           <Link className="navButton" href="/orders">Case Additions Dashboard</Link>
@@ -220,7 +236,7 @@ export default function Home() {
         <select value={regionFilter} onChange={(e) => {
           const region = e.target.value;
           setRegionFilter(region);
-          const nextStores = storesForRegion(region);
+          const nextStores = storesForRegion(region).filter((s) => deliveryFilter === 'ALL' || s.deliveryDays?.includes(deliveryFilter));
           if (!nextStores.some((s) => s.id === selectedStoreId)) setSelectedStoreId(nextStores[0]?.id ?? '');
           setStatusFilter('ALL');
         }}>
@@ -235,8 +251,17 @@ export default function Home() {
           <option value="EAST_HOUSTON">East Houston Region</option>
           <option value="WEST_HOUSTON">West Houston Region</option>
         </select>
+        <select value={deliveryFilter} onChange={(e) => {
+          const day = e.target.value;
+          setDeliveryFilter(day);
+          const nextStores = storesForRegion(regionFilter).filter((s) => day === 'ALL' || s.deliveryDays?.includes(day));
+          if (!nextStores.some((s) => s.id === selectedStoreId)) setSelectedStoreId(nextStores[0]?.id ?? '');
+        }}>
+          <option value="ALL">All delivery days</option>
+          {DAY_ORDER.map((day) => <option key={day} value={day}>{day} deliveries</option>)}
+        </select>
         <select value={selectedStoreId} onChange={(e) => { setSelectedStoreId(e.target.value); setStatusFilter('ALL'); }}>
-          {regionStores.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.city}</option>)}
+          {regionStores.map((s) => <option key={s.id} value={s.id}>{s.deliveryDays?.join('/') || 'No day'} — {s.name} — {s.city}</option>)}
         </select>
         <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
           <option value="ALL">All brands</option>
@@ -244,6 +269,7 @@ export default function Home() {
         </select>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
           <option value="ALL">All statuses</option>
+          <option value="NEEDS_ATTENTION">Needs attention (OOS + Low)</option>
           <option value="OOS">OOS only</option>
           <option value="LOW">Low only</option>
           <option value="HEALTHY">Healthy only</option>
