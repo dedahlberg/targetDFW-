@@ -4,6 +4,10 @@ export type Store = {
   address: string;
   city: string;
   state: string;
+  zip?: string;
+  latitude?: number;
+  longitude?: number;
+  timezone?: string;
 };
 
 export const stores: Store[] = [
@@ -38,7 +42,19 @@ export const stores: Store[] = [
 
   { id: '1430', name: 'Super Target #1430', address: '601 South Plano Road', city: 'Richardson', state: 'TX' },
   { id: '1489', name: 'Super Target #1489', address: '5301 N Garland Ave', city: 'Garland', state: 'TX' },
-  { id: '1763', name: 'Super Target #1763', address: '3201 Preston Rd', city: 'Frisco', state: 'TX' },
+
+  {
+    id: '1763',
+    name: 'Super Target #1763',
+    address: '3201 Preston Rd',
+    city: 'Frisco',
+    state: 'TX',
+    zip: '75034',
+    latitude: 33.1052075,
+    longitude: -96.8058367,
+    timezone: 'America/Chicago'
+  },
+
   { id: '1764', name: 'Super Target #1764', address: '2200 Dallas Pkwy', city: 'Plano', state: 'TX' },
   { id: '1775', name: 'Super Target #1775', address: '16731 Coit Rd', city: 'Dallas', state: 'TX' },
   { id: '1784', name: 'Super Target #1784', address: '6419 Skillman St', city: 'Dallas', state: 'TX' },
