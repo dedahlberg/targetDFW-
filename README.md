@@ -1,4 +1,4 @@
-# Target In-Stock Command Center
+Target DFW inventory tracker# Target In-Stock Command Center
 
 A clean-room, standalone Target store inventory MVP. It does not depend on any existing user repository.
 
