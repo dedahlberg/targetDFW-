@@ -88,17 +88,46 @@ function buildRequestBody(tcin: string, visitorId: string) {
   };
 }
 
-async function geocodeStore(store: (typeof stores)[number]): Promise<ResolvedLocation | null> {
-  if (store.zip && store.latitude !== undefined && store.longitude !== undefined) {
-    return {
-      zip: store.zip,
-      state: store.state,
-      latitude: store.latitude,
-      longitude: store.longitude,
-      timezone: store.timezone ?? 'America/Chicago',
-    };
-  }
+function resolvedFromStore(store: (typeof stores)[number], zip: string): ResolvedLocation | null {
+  if (store.latitude === undefined || store.longitude === undefined || !zip) return null;
+  return {
+    zip: zip.slice(0, 5),
+    state: store.state,
+    latitude: store.latitude,
+    longitude: store.longitude,
+    timezone: store.timezone ?? 'America/Chicago',
+  };
+}
 
+async function reverseZip(store: (typeof stores)[number]): Promise<string | null> {
+  if (store.latitude === undefined || store.longitude === undefined) return null;
+
+  const params = new URLSearchParams({
+    lat: String(store.latitude),
+    lon: String(store.longitude),
+    format: 'jsonv2',
+    addressdetails: '1',
+    zoom: '18',
+  });
+
+  try {
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, {
+      headers: {
+        accept: 'application/json',
+        'user-agent': 'TargetDFWInventory/1.0 https://targetdfw-git-main-go-big1.vercel.app/',
+      },
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const postcode = String(data?.address?.postcode ?? '').trim();
+    return postcode ? postcode.slice(0, 5) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function forwardGeocode(store: (typeof stores)[number]): Promise<ResolvedLocation | null> {
   const query = [store.address, store.city, store.state, 'USA'].join(', ');
   const params = new URLSearchParams({
     q: query,
@@ -110,32 +139,26 @@ async function geocodeStore(store: (typeof stores)[number]): Promise<ResolvedLoc
 
   try {
     const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
-      method: 'GET',
       headers: {
         accept: 'application/json',
         'user-agent': 'TargetDFWInventory/1.0 https://targetdfw-git-main-go-big1.vercel.app/',
       },
       cache: 'no-store',
     });
-
     if (!response.ok) return null;
-
     const data = await response.json();
     if (!Array.isArray(data) || data.length === 0) return null;
-
     const hit = data[0];
     const latitude = Number(hit.lat);
     const longitude = Number(hit.lon);
-    const zip = String(hit?.address?.postcode ?? '').trim();
-
+    const zip = String(hit?.address?.postcode ?? '').trim().slice(0, 5);
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !zip) return null;
-
     return {
       zip,
       state: store.state,
       latitude,
       longitude,
-      timezone: 'America/Chicago',
+      timezone: store.timezone ?? 'America/Chicago',
     };
   } catch {
     return null;
@@ -146,7 +169,24 @@ async function resolveStoreLocation(store: (typeof stores)[number]): Promise<Res
   const existing = locationCache.get(store.id);
   if (existing) return existing;
 
-  const promise = geocodeStore(store);
+  const promise = (async () => {
+    if (store.zip) {
+      const saved = resolvedFromStore(store, store.zip);
+      if (saved) return saved;
+    }
+
+    // Every store in our master has trusted coordinates. If ZIP is missing,
+    // reverse-geocode those coordinates instead of trying to rediscover the store by address.
+    const reverse = await reverseZip(store);
+    if (reverse) {
+      const saved = resolvedFromStore(store, reverse);
+      if (saved) return saved;
+    }
+
+    // Last-resort fallback for any future store that does not have usable coordinates.
+    return forwardGeocode(store);
+  })();
+
   locationCache.set(store.id, promise);
   return promise;
 }
@@ -162,24 +202,69 @@ function numeric(value: unknown): number | null {
 
 function classify(quantity: number | null, availability: string): InventoryResult['status'] {
   const value = String(availability || '').toUpperCase();
-
   if (quantity !== null) {
     if (quantity <= 0) return 'OOS';
     if (quantity <= 2) return 'LOW';
     return 'HEALTHY';
   }
-
   if (
     value.includes('OUT_OF_STOCK') ||
     value.includes('OUT OF STOCK') ||
     value.includes('NOT_AVAILABLE') ||
     value.includes('NOT AVAILABLE') ||
     value.includes('UNAVAILABLE')
+  ) return 'OOS';
+  return 'UNKNOWN';
+}
+
+function fulfillmentFromOption(option: any): { quantity: number | null; availability: string } {
+  const quantity = numeric(
+    option?.location_available_to_promise_quantity ??
+      option?.available_to_promise_quantity ??
+      option?.quantity
+  );
+  const availability = String(
+    option?.order_pickup?.availability_status ??
+      option?.in_store_only?.availability_status ??
+      option?.availability_status ??
+      option?.availability ??
+      'UNKNOWN'
+  );
+  return { quantity, availability };
+}
+
+function recursiveStoreOption(node: any, normalizedStoreId: string, depth = 0): any | null {
+  if (!node || depth > 12) return null;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const hit = recursiveStoreOption(child, normalizedStoreId, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (typeof node !== 'object') return null;
+
+  const locationId = node.location_id ?? node.store_id ?? node.storeId;
+  if (
+    locationId !== undefined &&
+    normalizeTargetStoreId(String(locationId)) === normalizedStoreId &&
+    (
+      node.location_available_to_promise_quantity !== undefined ||
+      node.available_to_promise_quantity !== undefined ||
+      node.quantity !== undefined ||
+      node.order_pickup?.availability_status !== undefined ||
+      node.in_store_only?.availability_status !== undefined ||
+      node.availability_status !== undefined
+    )
   ) {
-    return 'OOS';
+    return node;
   }
 
-  return 'UNKNOWN';
+  for (const value of Object.values(node)) {
+    const hit = recursiveStoreOption(value, normalizedStoreId, depth + 1);
+    if (hit) return hit;
+  }
+  return null;
 }
 
 function findFulfillmentResult(
@@ -190,29 +275,19 @@ function findFulfillmentResult(
   const normalizedStoreId = normalizeTargetStoreId(storeId);
 
   for (const module of modules) {
-    if (module?.module_type !== 'ProductDetailWebDatasourceFulfillmentAndVariations') continue;
-
     const product = module?.module_data?.data?.product;
     const options = product?.fulfillment?.store_options;
     if (!Array.isArray(options)) continue;
-
     const storeOption = options.find(
       (option: any) => normalizeTargetStoreId(String(option?.location_id ?? '')) === normalizedStoreId
     );
-
-    if (!storeOption) continue;
-
-    const quantity = numeric(storeOption?.location_available_to_promise_quantity);
-    const availability = String(
-      storeOption?.order_pickup?.availability_status ??
-        storeOption?.in_store_only?.availability_status ??
-        'UNKNOWN'
-    );
-
-    return { quantity, availability };
+    if (storeOption) return fulfillmentFromOption(storeOption);
   }
 
-  return null;
+  // Target occasionally moves fulfillment fields into a different module shape.
+  // Fall back to a bounded recursive scan rather than marking the whole store unknown.
+  const fallback = recursiveStoreOption(payload, normalizedStoreId);
+  return fallback ? fulfillmentFromOption(fallback) : null;
 }
 
 export async function fetchTargetInventory(input: Input): Promise<InventoryResult> {
@@ -253,10 +328,10 @@ export async function fetchTargetInventory(input: Input): Promise<InventoryResul
       storeId: input.storeId,
       quantity: null,
       status: 'UNKNOWN',
-      availability: 'GEOCODE_ERROR',
+      availability: 'STORE_LOCATION_ERROR',
       source: 'TARGET_PDP',
       fetchedAt,
-      error: `Could not resolve coordinates for ${store.name}, ${store.address}, ${store.city}.`,
+      error: `Could not resolve ZIP/location for ${store.name}. Saved coordinates were ${store.latitude}, ${store.longitude}.`,
     };
   }
 
@@ -265,7 +340,6 @@ export async function fetchTargetInventory(input: Input): Promise<InventoryResul
   try {
     const visitorId = makeVisitorId();
     const requestBody = buildRequestBody(input.tcin, visitorId);
-
     const params = new URLSearchParams({
       auth: 'true',
       purchasable_store_ids: targetStoreId,
@@ -290,9 +364,7 @@ export async function fetchTargetInventory(input: Input): Promise<InventoryResul
       key,
     });
 
-    const url =
-      `https://www.target.com/cdui_orchestrations/v1/pages/pdp/deferred_enrichment/modules?${params.toString()}`;
-
+    const url = `https://www.target.com/cdui_orchestrations/v1/pages/pdp/deferred_enrichment/modules?${params.toString()}`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -301,8 +373,7 @@ export async function fetchTargetInventory(input: Input): Promise<InventoryResul
         'content-type': 'application/json',
         origin: 'https://www.target.com',
         referer: `https://www.target.com/p/-/A-${input.tcin}`,
-        'user-agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
       },
       body: JSON.stringify(requestBody),
       cache: 'no-store',
@@ -318,15 +389,12 @@ export async function fetchTargetInventory(input: Input): Promise<InventoryResul
         availability: 'API_ERROR',
         source: 'TARGET_PDP',
         fetchedAt,
-        error:
-          `Target PDP enrichment returned HTTP ${response.status}` +
-          (text ? `: ${text.slice(0, 300)}` : ''),
+        error: `Target PDP enrichment returned HTTP ${response.status}` + (text ? `: ${text.slice(0, 300)}` : ''),
       };
     }
 
     const payload = await response.json();
     const result = findFulfillmentResult(payload, targetStoreId);
-
     if (!result) {
       return {
         tcin: input.tcin,
@@ -336,7 +404,7 @@ export async function fetchTargetInventory(input: Input): Promise<InventoryResul
         availability: 'NO_INVENTORY_DATA',
         source: 'TARGET_PDP',
         fetchedAt,
-        error: 'Target accepted the request, but the fulfillment module for this store was not returned.',
+        error: 'Target accepted the request, but no store-level fulfillment data was returned for this item.',
       };
     }
 
