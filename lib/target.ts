@@ -18,32 +18,175 @@ type Input = {
   longitude: number;
 };
 
-function classify(quantity: number | null, availability: string): InventoryResult['status'] {
-  if (quantity === null) return availability === 'OUT_OF_STOCK' ? 'OOS' : 'UNKNOWN';
-  if (quantity <= 0) return 'OOS';
-  if (quantity <= 2) return 'LOW';
-  return 'HEALTHY';
+function classify(
+  quantity: number | null,
+  availability: string
+): InventoryResult['status'] {
+  const a = String(availability || '').toUpperCase();
+
+  if (quantity !== null && Number.isFinite(quantity)) {
+    if (quantity <= 0) return 'OOS';
+    if (quantity <= 2) return 'LOW';
+    return 'HEALTHY';
+  }
+
+  if (
+    a.includes('OUT_OF_STOCK') ||
+    a.includes('NOT_AVAILABLE') ||
+    a === 'UNAVAILABLE'
+  ) {
+    return 'OOS';
+  }
+
+  return 'UNKNOWN';
 }
 
-function findInventory(payload: any, storeId: string): { quantity: number | null; availability: string } {
-  const fulfillment = payload?.data?.product?.fulfillment;
-  const locations = fulfillment?.store_options ?? fulfillment?.locations ?? [];
+function numeric(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
 
-  if (Array.isArray(locations)) {
-    const selected = locations.find((x: any) => String(x?.location_id ?? x?.store?.store_id ?? x?.store_id ?? '') === String(storeId)) ?? locations[0];
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+
+  return null;
+}
+
+function getStoreId(obj: any): string {
+  return String(
+    obj?.location_id ??
+      obj?.store_id ??
+      obj?.store?.store_id ??
+      obj?.store?.location_id ??
+      obj?.location?.location_id ??
+      ''
+  );
+}
+
+function getQuantity(obj: any): number | null {
+  const candidates = [
+    obj?.location_available_to_promise_quantity,
+    obj?.available_to_promise_quantity,
+    obj?.available_quantity,
+    obj?.quantity,
+    obj?.inventory_quantity,
+    obj?.on_hand_quantity,
+  ];
+
+  for (const candidate of candidates) {
+    const n = numeric(candidate);
+    if (n !== null) return n;
+  }
+
+  return null;
+}
+
+function getAvailability(obj: any): string {
+  return String(
+    obj?.order_pickup?.availability_status ??
+      obj?.pickup?.availability_status ??
+      obj?.in_store_only?.availability_status ??
+      obj?.availability_status ??
+      obj?.fulfillment?.availability_status ??
+      obj?.status ??
+      'UNKNOWN'
+  );
+}
+
+function searchPayload(
+  node: any,
+  storeId: string
+): { quantity: number | null; availability: string } | null {
+  if (!node || typeof node !== 'object') return null;
+
+  if (Array.isArray(node)) {
+    // Prefer an entry explicitly belonging to the requested store.
+    const exact = node.find((item) => getStoreId(item) === String(storeId));
+
+    if (exact) {
+      const quantity = getQuantity(exact);
+      const availability = getAvailability(exact);
+
+      if (quantity !== null || availability !== 'UNKNOWN') {
+        return { quantity, availability };
+      }
+    }
+
+    for (const item of node) {
+      const result = searchPayload(item, storeId);
+      if (result) return result;
+    }
+
+    return null;
+  }
+
+  const nodeStoreId = getStoreId(node);
+  const quantity = getQuantity(node);
+  const availability = getAvailability(node);
+
+  if (
+    nodeStoreId === String(storeId) &&
+    (quantity !== null || availability !== 'UNKNOWN')
+  ) {
+    return { quantity, availability };
+  }
+
+  for (const value of Object.values(node)) {
+    const result = searchPayload(value, storeId);
+    if (result) return result;
+  }
+
+  return null;
+}
+
+function findInventory(
+  payload: any,
+  storeId: string
+): { quantity: number | null; availability: string } {
+  // Known fulfillment structures first.
+  const fulfillment =
+    payload?.data?.product?.fulfillment ??
+    payload?.data?.product?.fulfillment_options ??
+    payload?.data?.fulfillment;
+
+  const knownLocations =
+    fulfillment?.store_options ??
+    fulfillment?.locations ??
+    fulfillment?.pickup_options ??
+    [];
+
+  if (Array.isArray(knownLocations)) {
+    const selected =
+      knownLocations.find(
+        (x: any) => getStoreId(x) === String(storeId)
+      ) ?? knownLocations[0];
+
     if (selected) {
-      const q = selected.location_available_to_promise_quantity ?? selected.available_to_promise_quantity ?? null;
-      const availability = selected?.order_pickup?.availability_status ?? selected?.in_store_only?.availability_status ?? selected?.availability_status ?? 'UNKNOWN';
-      return { quantity: typeof q === 'number' ? q : q == null ? null : Number(q), availability };
+      return {
+        quantity: getQuantity(selected),
+        availability: getAvailability(selected),
+      };
     }
   }
 
-  const quantity = fulfillment?.available_to_promise_quantity ?? null;
-  const availability = fulfillment?.availability_status ?? 'UNKNOWN';
-  return { quantity: typeof quantity === 'number' ? quantity : quantity == null ? null : Number(quantity), availability };
+  // Target changes response layouts periodically, so recursively inspect
+  // the response rather than relying on one rigid JSON structure.
+  const recursive = searchPayload(payload, storeId);
+
+  if (recursive) return recursive;
+
+  const rootQuantity = getQuantity(fulfillment);
+  const rootAvailability = getAvailability(fulfillment);
+
+  return {
+    quantity: rootQuantity,
+    availability: rootAvailability,
+  };
 }
 
-export async function fetchTargetInventory(input: Input): Promise<InventoryResult> {
+export async function fetchTargetInventory(
+  input: Input
+): Promise<InventoryResult> {
   const key = process.env.TARGET_REDSKY_KEY;
   const fetchedAt = new Date().toISOString();
 
@@ -56,46 +199,69 @@ export async function fetchTargetInventory(input: Input): Promise<InventoryResul
       availability: 'CONFIG_REQUIRED',
       source: 'TARGET_REDSKY',
       fetchedAt,
-      error: 'TARGET_REDSKY_KEY is not configured.'
+      error: 'TARGET_REDSKY_KEY is not configured.',
     };
   }
 
-  const params = new URLSearchParams({
+  const baseParams = {
     key,
-    is_bot: 'false',
+    channel: 'WEB',
     tcin: input.tcin,
     store_id: input.storeId,
     pricing_store_id: input.storeId,
-    store_positions_store_id: input.storeId,
-    has_store_positions_store_id: 'true',
-    has_pricing_store_id: 'true',
-    required_store_id: input.storeId,
-    has_required_store_id: 'true',
     scheduled_delivery_store_id: input.storeId,
+    required_store_id: input.storeId,
     zip: input.zip,
     state: input.state,
     latitude: String(input.latitude),
-    longitude: String(input.longitude)
-  });
+    longitude: String(input.longitude),
+  };
 
-  const candidates = [
-    `https://redsky.target.com/redsky_aggregations/v1/web_platform/product_fulfillment_v1?${params}`,
-    `https://redsky.target.com/redsky_aggregations/v1/web/pdp_fulfillment_v1?${params}`
+  /*
+   * Target changes Redsky aggregation route names over time.
+   * We try the current web-style fulfillment routes first and retain
+   * older variants as fallbacks.
+   */
+  const endpointPaths = [
+    '/redsky_aggregations/v1/web/product_fulfillment_v1',
+    '/redsky_aggregations/v1/web/product_fulfillment_and_variation_hierarchy_v1',
+    '/redsky_aggregations/v1/web_platform/product_fulfillment_v1',
+    '/redsky_aggregations/v1/web/pdp_fulfillment_v1',
   ];
 
   let lastError = 'Target inventory request failed.';
-  for (const url of candidates) {
+  const attempted: string[] = [];
+
+  for (const path of endpointPaths) {
+    const params = new URLSearchParams(baseParams);
+
+    const url = `https://redsky.target.com${path}?${params.toString()}`;
+
+    attempted.push(path);
+
     try {
       const res = await fetch(url, {
-        headers: { 'accept': 'application/json', 'user-agent': 'Mozilla/5.0 TargetInventoryCommandCenter/0.1' },
-        cache: 'no-store'
+        method: 'GET',
+        headers: {
+          accept: 'application/json',
+          'accept-language': 'en-US,en;q=0.9',
+          origin: 'https://www.target.com',
+          referer: 'https://www.target.com/',
+          'user-agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+        },
+        cache: 'no-store',
       });
+
       if (!res.ok) {
-        lastError = `Target returned HTTP ${res.status}`;
+        lastError = `${path} returned HTTP ${res.status}`;
         continue;
       }
+
       const payload = await res.json();
+
       const parsed = findInventory(payload, input.storeId);
+
       return {
         tcin: input.tcin,
         storeId: input.storeId,
@@ -103,10 +269,13 @@ export async function fetchTargetInventory(input: Input): Promise<InventoryResul
         status: classify(parsed.quantity, parsed.availability),
         availability: parsed.availability,
         source: 'TARGET_REDSKY',
-        fetchedAt
+        fetchedAt,
       };
     } catch (error) {
-      lastError = error instanceof Error ? error.message : 'Unknown Target request error';
+      lastError =
+        error instanceof Error
+          ? `${path}: ${error.message}`
+          : `${path}: Unknown Target request error`;
     }
   }
 
@@ -118,6 +287,6 @@ export async function fetchTargetInventory(input: Input): Promise<InventoryResul
     availability: 'API_ERROR',
     source: 'TARGET_REDSKY',
     fetchedAt,
-    error: lastError
+    error: `${lastError}. Tried: ${attempted.join(', ')}`,
   };
 }
