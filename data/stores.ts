@@ -67,7 +67,7 @@ export const stores: Store[] = [
   { id: '1861', name: 'Target #1861', address: '4160 Town Center Rd', city: 'Sherman', state: 'TX', market: 'Dallas', latitude: 33.6801119, longitude: -96.6127146, timezone: 'America/Chicago', deliveryDays: ['Mon'] },
   { id: '2550', name: 'Target #2550', address: '3440 W FM 544', city: 'Wylie', state: 'TX', market: 'Dallas', latitude: 33.0091964, longitude: -96.5938862, timezone: 'America/Chicago', deliveryDays: ['Wed'] },
   { id: '2884', name: 'Target #2884', address: '401 Gates Pkwy', city: 'Prosper', state: 'TX', market: 'Dallas', latitude: 33.2203113, longitude: -96.8057727, timezone: 'America/Chicago', deliveryDays: ['Wed'] },
-  { id: '2917', name: 'Target #2917', address: '2755 W University Dr Ste 1101', city: 'Denton', state: 'TX', market: 'Dallas', latitude: 33.2291864, longitude: -97.1693541, timezone: 'America/Chicago', deliveryDays: ['Mon'] },
+  { id: '2917', name: 'Target #2917', address: '2755 W University Dr Ste 1101', city: 'Denton', state: 'TX', market: 'Dallas', zip: '76201', latitude: 33.2291864, longitude: -97.1693541, timezone: 'America/Chicago', deliveryDays: ['Mon'] },
   { id: '3292', name: 'Target #3292', address: '8335 Westchester Dr #200', city: 'Dallas', state: 'TX', market: 'Dallas', latitude: 32.8645059, longitude: -96.8074668, timezone: 'America/Chicago', deliveryDays: ['Wed'] },
   { id: '7500', name: 'Target #7500', address: '26550 E University Dr', city: 'Aubrey', state: 'TX', market: 'Dallas', zip: '76227', latitude: 33.222563, longitude: -96.9678864, timezone: 'America/Chicago', deliveryDays: ['Wed'] },
 ];
