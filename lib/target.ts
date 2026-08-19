@@ -310,6 +310,12 @@ function findNumberByKeys(
   return undefined;
 }
 
+function makeVisitorId(): string {
+  const randomPart = crypto.randomUUID().replaceAll('-', '').toUpperCase();
+
+  return randomPart.slice(0, 32);
+}
+
 async function getStoreContext(
   storeId: string,
   key: string
@@ -328,13 +334,16 @@ async function getStoreContext(
     try {
       const response = await fetch(url, {
         method: 'GET',
+
         headers: {
           accept: 'application/json',
           'accept-language': 'en-US,en;q=0.9',
+          origin: 'https://www.target.com',
           referer: 'https://www.target.com/',
           'user-agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
         },
+
         cache: 'no-store',
       });
 
@@ -374,9 +383,9 @@ async function getStoreContext(
         ]) ?? 'America/Chicago';
 
       if (
-        zip ||
-        state ||
-        latitude !== undefined ||
+        zip &&
+        state &&
+        latitude !== undefined &&
         longitude !== undefined
       ) {
         return {
@@ -388,7 +397,7 @@ async function getStoreContext(
         };
       }
     } catch {
-      // Try the next store-location endpoint.
+      // Try next endpoint.
     }
   }
 
@@ -422,75 +431,89 @@ export async function fetchTargetInventory(
       key
     );
 
+    if (
+      !store.zip ||
+      !store.state ||
+      store.latitude === undefined ||
+      store.longitude === undefined
+    ) {
+      return {
+        tcin: input.tcin,
+        storeId: input.storeId,
+        quantity: null,
+        status: 'UNKNOWN',
+        availability: 'STORE_LOCATION_ERROR',
+        source: 'TARGET_PDP',
+        fetchedAt,
+        error:
+          'Could not resolve Target store ZIP/coordinates for this store.',
+      };
+    }
+
+    const visitorId = makeVisitorId();
+
     const params = new URLSearchParams({
       auth: 'true',
 
-      purchasable_store_ids: input.storeId,
+      purchasable_store_ids:
+        input.storeId,
+
+      latitude:
+        String(store.latitude),
+
+      longitude:
+        String(store.longitude),
 
       scheduled_delivery_store_id:
         input.storeId,
 
-      store_id: input.storeId,
+      scheduled_delivery_zip_code:
+        store.zip,
 
-      tcin: input.tcin,
+      state:
+        store.state,
+
+      zip:
+        store.zip,
+
+      store_id:
+        input.storeId,
+
+      tcin:
+        input.tcin,
 
       timezone:
         store.timezone ?? 'America/Chicago',
 
-      country: 'US',
+      country:
+        'US',
 
-      sapphire_channel: 'WEB',
+      sapphire_channel:
+        'WEB',
 
       sapphire_page:
         `/p/-/A-${input.tcin}`,
 
-      channel: 'WEB',
+      channel:
+        'WEB',
 
       page:
         `/p/-/A-${input.tcin}`,
 
-      privacy_do_not_sell: 'false',
+      visitor_id:
+        visitorId,
+
+      privacy_do_not_sell:
+        'false',
 
       targeted_advertising_opt_out:
         'false',
 
-      device_type: 'desktop',
+      device_type:
+        'desktop',
 
       key,
     });
-
-    if (store.latitude !== undefined) {
-      params.set(
-        'latitude',
-        String(store.latitude)
-      );
-    }
-
-    if (store.longitude !== undefined) {
-      params.set(
-        'longitude',
-        String(store.longitude)
-      );
-    }
-
-    if (store.zip) {
-      params.set(
-        'zip',
-        store.zip
-      );
-
-      params.set(
-        'scheduled_delivery_zip_code',
-        store.zip
-      );
-    }
-
-    if (store.state) {
-      params.set(
-        'state',
-        store.state
-      );
-    }
 
     const url =
       `https://www.target.com` +
@@ -501,13 +524,11 @@ export async function fetchTargetInventory(
       method: 'POST',
 
       headers: {
-        accept: 'application/json',
+        accept:
+          'application/json, text/plain, */*',
 
         'accept-language':
           'en-US,en;q=0.9',
-
-        'content-type':
-          'application/json',
 
         origin:
           'https://www.target.com',
@@ -519,12 +540,12 @@ export async function fetchTargetInventory(
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
       },
 
-      body: JSON.stringify({}),
-
       cache: 'no-store',
     });
 
     if (!response.ok) {
+      const text = await response.text();
+
       return {
         tcin: input.tcin,
         storeId: input.storeId,
@@ -534,7 +555,8 @@ export async function fetchTargetInventory(
         source: 'TARGET_PDP',
         fetchedAt,
         error:
-          `Target PDP enrichment returned HTTP ${response.status}`,
+          `Target PDP enrichment returned HTTP ${response.status}` +
+          (text ? `: ${text.slice(0, 200)}` : ''),
       };
     }
 
@@ -561,13 +583,17 @@ export async function fetchTargetInventory(
         source: 'TARGET_PDP',
         fetchedAt,
         error:
-          'Target returned the PDP response but no recognized inventory fields were found.',
+          'Target accepted the request, but the returned JSON did not contain a recognized quantity or availability field.',
       };
     }
 
     return {
-      tcin: input.tcin,
-      storeId: input.storeId,
+      tcin:
+        input.tcin,
+
+      storeId:
+        input.storeId,
+
       quantity:
         fallback.quantity,
 
@@ -580,7 +606,8 @@ export async function fetchTargetInventory(
       availability:
         fallback.availability,
 
-      source: 'TARGET_PDP',
+      source:
+        'TARGET_PDP',
 
       fetchedAt,
     };
