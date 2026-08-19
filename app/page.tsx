@@ -133,7 +133,6 @@ export default function Home() {
           <option value="OOS">OOS only</option>
           <option value="LOW">Low only</option>
           <option value="HEALTHY">Healthy only</option>
-          <option value="UNKNOWN">Unknown/API only</option>
         </select>
         <button onClick={exportCsv}>Export Store</button>
       </section>
@@ -154,7 +153,6 @@ export default function Home() {
           <span>In-Stock Rate</span>
           <small>{knownCount > 0 ? `${counts.HEALTHY} / ${knownCount} healthy` : 'Refresh store to calculate'}</small>
         </div>
-        <div className="stat neutral"><strong>{counts.UNKNOWN}</strong><span>Unknown / API</span></div>
       </section>
 
       <section className="tableWrap">
