@@ -17,6 +17,7 @@ import {
   WEST_HOUSTON_REGION_IDS,
 } from '@/data/regions';
 import { getWeekStart, readOrderAdditions, saveOrderAddition } from '@/lib/orderTracking';
+import { saveStoreInventorySnapshot } from '@/lib/inventoryTracking';
 
 type Row = {
   key: string;
@@ -180,6 +181,19 @@ export default function Home() {
       }
       setRows([...next]);
     }
+
+    const refreshedRows = next.filter((row) => row.storeId === selectedStoreId);
+    saveStoreInventorySnapshot({
+      storeId: selectedStoreId,
+      refreshedAt: new Date().toISOString(),
+      rows: refreshedRows.map((row) => ({
+        tcin: row.tcin,
+        quantity: row.quantity,
+        status: row.status,
+        availability: row.availability,
+      })),
+    });
+
     setBusy(false);
   }
 
@@ -225,6 +239,7 @@ export default function Home() {
           <p>Select a region and delivery day, then work the OOS and low inventory opportunities first.</p>
         </div>
         <div className="headerActions">
+          <Link className="navButton" href="/regions">Regional Dashboard</Link>
           <Link className="navButton" href="/orders">Case Additions Dashboard</Link>
           <button className="primary" onClick={refreshSelectedStore} disabled={busy || !selectedStoreId}>
             {busy ? 'Refreshing Store…' : 'Refresh Selected Store'}
@@ -327,7 +342,7 @@ export default function Home() {
         </table>
       </section>
 
-      <footer>Reported quantity is Target fulfillment data, not a guaranteed physical shelf count. Case additions are tracked by sales week in this browser. Dollar value uses the discounted case price loaded in the product master.</footer>
+      <footer>Reported quantity is Target fulfillment data, not a guaranteed physical shelf count. Store refreshes are saved in this browser for the Regional Dashboard. Case additions are tracked by sales week in this browser.</footer>
     </main>
   );
 }
