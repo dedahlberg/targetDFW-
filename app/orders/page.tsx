@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { getWeekStart, OrderAddition, readOrderAdditions } from '@/lib/orderTracking';
+import { getWeekStart, OrderAddition, readOrderAdditions, writeOrderAdditions } from '@/lib/orderTracking';
 
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
 
@@ -43,6 +43,12 @@ export default function OrdersPage() {
   const currentWeekStores = new Set(currentWeekRecords.map((r) => r.storeId)).size;
   const missingPriceLines = currentWeekRecords.filter((r) => r.casePrice === undefined).length;
 
+  function deleteLineItem(id: string) {
+    const next = records.filter((r) => r.id !== id);
+    writeOrderAdditions(next);
+    setRecords(next);
+  }
+
   return (
     <main>
       <header>
@@ -67,10 +73,10 @@ export default function OrdersPage() {
         <div className="sectionTitle"><div><h2>Current Week Detail</h2><p>Every item with cases added for the current sales week.</p></div></div>
         <div className="tableWrap">
           <table>
-            <thead><tr><th>Store</th><th>City</th><th>Brand</th><th>Item</th><th>TCIN</th><th>Cases Added</th><th>Case Price</th><th>Added $</th><th>Updated</th></tr></thead>
+            <thead><tr><th>Store</th><th>City</th><th>Brand</th><th>Item</th><th>TCIN</th><th>Cases Added</th><th>Case Price</th><th>Added $</th><th>Delete Line Item</th><th>Updated</th></tr></thead>
             <tbody>
               {currentWeekRecords.length === 0 ? (
-                <tr><td colSpan={9}>No case additions recorded for this week yet.</td></tr>
+                <tr><td colSpan={10}>No case additions recorded for this week yet.</td></tr>
               ) : (
                 [...currentWeekRecords]
                   .sort((a, b) => (b.addedValue ?? 0) - (a.addedValue ?? 0) || b.cases - a.cases || a.storeName.localeCompare(b.storeName))
@@ -80,6 +86,7 @@ export default function OrdersPage() {
                       <td className="qty">{r.cases}</td>
                       <td>{r.casePrice !== undefined ? money.format(r.casePrice) : <span className="missingPrice">Missing</span>}</td>
                       <td className="moneyCell">{r.addedValue !== undefined ? money.format(r.addedValue) : '—'}</td>
+                      <td><button type="button" onClick={() => deleteLineItem(r.id)}>Delete</button></td>
                       <td>{new Date(r.updatedAt).toLocaleString()}</td>
                     </tr>
                   ))
