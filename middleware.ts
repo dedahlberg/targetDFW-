@@ -19,15 +19,14 @@ export async function middleware(request: NextRequest) {
   }
 
   const sitePassword = process.env.SITE_PASSWORD;
-  const authSecret = process.env.AUTH_SECRET;
 
-  if (!sitePassword || !authSecret) {
+  if (!sitePassword) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
-  const expected = await digest(`${sitePassword}:${authSecret}`);
+  const expected = await digest(`targetdfw:${sitePassword}`);
   const supplied = request.cookies.get('targetdfw_auth')?.value;
 
   if (supplied === expected) return NextResponse.next();
