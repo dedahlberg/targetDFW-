@@ -34,8 +34,6 @@ const initialRows: Row[] = stores.flatMap((store) =>
   }))
 );
 
-const priority = { OOS: 0, LOW: 1, UNKNOWN: 2, HEALTHY: 3 } as const;
-
 export default function Home() {
   const [rows, setRows] = useState(initialRows);
   const [selectedStoreId, setSelectedStoreId] = useState(stores[0]?.id ?? '');
@@ -50,7 +48,16 @@ export default function Home() {
       .filter((r) => r.storeId === selectedStoreId)
       .filter((r) => statusFilter === 'ALL' || r.status === statusFilter)
       .filter((r) => brandFilter === 'ALL' || r.brand === brandFilter)
-      .sort((a, b) => priority[a.status] - priority[b.status] || a.brand.localeCompare(b.brand) || a.product.localeCompare(b.product)),
+      .sort((a, b) => {
+        const aQty = a.quantity === null ? Number.POSITIVE_INFINITY : a.quantity;
+        const bQty = b.quantity === null ? Number.POSITIVE_INFINITY : b.quantity;
+
+        return (
+          aQty - bQty ||
+          a.brand.localeCompare(b.brand) ||
+          a.product.localeCompare(b.product)
+        );
+      }),
     [rows, selectedStoreId, statusFilter, brandFilter]
   );
 
