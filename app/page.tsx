@@ -36,6 +36,8 @@ const initialRows: Row[] = stores.flatMap((store) =>
   }))
 );
 
+const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+
 export default function Home() {
   const [rows, setRows] = useState(initialRows);
   const [selectedStoreId, setSelectedStoreId] = useState(stores[0]?.id ?? '');
@@ -63,12 +65,7 @@ export default function Home() {
       .sort((a, b) => {
         const aQty = a.quantity === null ? Number.POSITIVE_INFINITY : a.quantity;
         const bQty = b.quantity === null ? Number.POSITIVE_INFINITY : b.quantity;
-
-        return (
-          aQty - bQty ||
-          a.brand.localeCompare(b.brand) ||
-          a.product.localeCompare(b.product)
-        );
+        return aQty - bQty || a.brand.localeCompare(b.brand) || a.product.localeCompare(b.product);
       }),
     [rows, selectedStoreId, statusFilter, brandFilter]
   );
@@ -83,9 +80,13 @@ export default function Home() {
   const knownCount = counts.HEALTHY + counts.LOW + counts.OOS;
   const inStockRate = knownCount > 0 ? (counts.HEALTHY / knownCount) * 100 : null;
   const inStockClass = inStockRate === null ? 'neutral' : inStockRate >= 98.5 ? 'rateGreen' : inStockRate >= 95 ? 'rateYellow' : 'rateRed';
-
   const brands = useMemo(() => Array.from(new Set(products.map((p) => p.brand))).sort(), []);
   const selectedStoreCases = selectedRows.reduce((sum, r) => sum + (casesByKey[r.key] ?? 0), 0);
+  const selectedStoreAddedValue = selectedRows.reduce((sum, r) => {
+    const product = products.find((p) => p.tcin === r.tcin);
+    const cases = casesByKey[r.key] ?? 0;
+    return sum + (product?.casePrice ? product.casePrice * cases : 0);
+  }, 0);
 
   async function refreshSelectedStore() {
     if (!selectedStoreId) return;
@@ -115,6 +116,7 @@ export default function Home() {
   }
 
   function setCases(row: Row, cases: number) {
+    const product = products.find((p) => p.tcin === row.tcin);
     saveOrderAddition({
       storeId: row.storeId,
       storeName: row.store,
@@ -123,15 +125,20 @@ export default function Home() {
       product: row.product,
       tcin: row.tcin,
       cases,
+      casePrice: product?.casePrice,
     });
-
     setCasesByKey((current) => ({ ...current, [row.key]: cases }));
   }
 
   function exportCsv() {
-    const header = ['Priority','Store','City','Brand','Product','TCIN','Reported Qty','Status','Cases Added','Availability','Fetched At','Error'];
+    const header = ['Priority','Store','City','Brand','Product','TCIN','Reported Qty','Status','Cases Added','Case Price','Added Value','Availability','Fetched At','Error'];
     const escape = (v: unknown) => `"${String(v ?? '').replaceAll('"', '""')}"`;
-    const body = filtered.map((r, idx) => [idx + 1,r.store,r.city,r.brand,r.product,r.tcin,r.quantity,r.status,casesByKey[r.key] ?? 0,r.availability,r.fetchedAt,r.error].map(escape).join(','));
+    const body = filtered.map((r, idx) => {
+      const product = products.find((p) => p.tcin === r.tcin);
+      const cases = casesByKey[r.key] ?? 0;
+      const addedValue = product?.casePrice ? Number((product.casePrice * cases).toFixed(2)) : '';
+      return [idx + 1,r.store,r.city,r.brand,r.product,r.tcin,r.quantity,r.status,cases,product?.casePrice ?? '',addedValue,r.availability,r.fetchedAt,r.error].map(escape).join(',');
+    });
     const blob = new Blob([[header.join(','), ...body].join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -176,22 +183,11 @@ export default function Home() {
 
       {selectedStore && (
         <section className="storeCard">
-          <div>
-            <strong>{selectedStore.name}</strong>
-            <span>{selectedStore.address}, {selectedStore.city}, {selectedStore.state}</span>
-          </div>
-          <div>
-            <strong>Store ID {selectedStore.id}</strong>
-            <span>{products.length} tracked products</span>
-          </div>
-          <div>
-            <strong>Delivery</strong>
-            <span>{selectedStore.deliveryDays?.length ? selectedStore.deliveryDays.join(' / ') : 'Not loaded'}</span>
-          </div>
-          <div>
-            <strong>Cases Added</strong>
-            <span>{selectedStoreCases} this week</span>
-          </div>
+          <div><strong>{selectedStore.name}</strong><span>{selectedStore.address}, {selectedStore.city}, {selectedStore.state}</span></div>
+          <div><strong>Store ID {selectedStore.id}</strong><span>{products.length} tracked products</span></div>
+          <div><strong>Delivery</strong><span>{selectedStore.deliveryDays?.length ? selectedStore.deliveryDays.join(' / ') : 'Not loaded'}</span></div>
+          <div><strong>Cases Added</strong><span>{selectedStoreCases} this week</span></div>
+          <div><strong>Added $</strong><span>{money.format(selectedStoreAddedValue)} this week</span></div>
         </section>
       )}
 
@@ -208,30 +204,24 @@ export default function Home() {
 
       <section className="tableWrap">
         <table>
-          <thead><tr><th>#</th><th>Brand</th><th>Item</th><th>Category</th><th>TCIN</th><th>Qty</th><th>Status</th><th>Qty Ordered</th><th>Target Availability</th></tr></thead>
+          <thead><tr><th>#</th><th>Brand</th><th>Item</th><th>Category</th><th>TCIN</th><th>Qty</th><th>Status</th><th>Qty Ordered</th><th>Case Price</th><th>Added $</th><th>Target Availability</th></tr></thead>
           <tbody>
             {filtered.map((r, idx) => {
               const product = products.find((p) => p.tcin === r.tcin);
+              const cases = casesByKey[r.key] ?? 0;
+              const addedValue = product?.casePrice !== undefined ? product.casePrice * cases : null;
               return (
                 <tr key={r.key}>
                   <td>{idx + 1}</td><td>{r.brand}</td><td>{r.product}</td><td>{product?.category ?? ''}</td>
                   <td className="mono">{r.tcin}</td><td className="qty">{r.quantity ?? '—'}</td>
                   <td><span className={`pill ${r.status.toLowerCase()}`}>{r.status}</span></td>
                   <td>
-                    <select
-                      className="caseSelect"
-                      aria-label={`Cases ordered for ${r.product}`}
-                      value={casesByKey[r.key] ?? 0}
-                      onChange={(e) => setCases(r, Number(e.target.value))}
-                    >
-                      <option value={0}>0</option>
-                      <option value={1}>1</option>
-                      <option value={2}>2</option>
-                      <option value={3}>3</option>
-                      <option value={4}>4</option>
-                      <option value={5}>5</option>
+                    <select className="caseSelect" aria-label={`Cases ordered for ${r.product}`} value={cases} onChange={(e) => setCases(r, Number(e.target.value))}>
+                      <option value={0}>0</option><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option><option value={4}>4</option><option value={5}>5</option>
                     </select>
                   </td>
+                  <td>{product?.casePrice !== undefined ? money.format(product.casePrice) : <span className="missingPrice">Missing</span>}</td>
+                  <td className="moneyCell">{addedValue !== null ? money.format(addedValue) : '—'}</td>
                   <td>{r.availability}{r.error && <small className="error">{r.error}</small>}</td>
                 </tr>
               );
@@ -240,7 +230,7 @@ export default function Home() {
         </table>
       </section>
 
-      <footer>Reported quantity is Target fulfillment data, not a guaranteed physical shelf count. Case additions are tracked by sales week in this browser.</footer>
+      <footer>Reported quantity is Target fulfillment data, not a guaranteed physical shelf count. Case additions are tracked by sales week in this browser. Dollar value uses the discounted case price loaded in the product master.</footer>
     </main>
   );
 }
