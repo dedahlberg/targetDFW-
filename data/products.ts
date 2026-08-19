@@ -20,12 +20,6 @@ export const products: Product[] = [
     category: 'French Bread Pizza'
   },
   {
-    tcin: '13376391',
-    brand: 'Red Baron',
-    name: 'Supreme French Bread Pizza',
-    category: 'French Bread Pizza'
-  },
-  {
     tcin: '13376389',
     brand: 'Red Baron',
     name: 'Pepperoni Classic Crust Pizza',
