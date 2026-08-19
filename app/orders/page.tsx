@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { getWeekStart, OrderAddition, readOrderAdditions } from '@/lib/orderTracking';
 
+const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+
 export default function OrdersPage() {
   const [records, setRecords] = useState<OrderAddition[]>([]);
 
@@ -15,16 +17,12 @@ export default function OrdersPage() {
   const currentMonth = new Date().toISOString().slice(0, 7);
 
   const weeklyRows = useMemo(() => {
-    const map = new Map<string, { weekStart: string; cases: number; stores: Set<string>; lines: number }>();
+    const map = new Map<string, { weekStart: string; cases: number; dollars: number; stores: Set<string>; lines: number }>();
 
     for (const r of records) {
-      const existing = map.get(r.weekStart) ?? {
-        weekStart: r.weekStart,
-        cases: 0,
-        stores: new Set<string>(),
-        lines: 0,
-      };
+      const existing = map.get(r.weekStart) ?? { weekStart: r.weekStart, cases: 0, dollars: 0, stores: new Set<string>(), lines: 0 };
       existing.cases += r.cases;
+      existing.dollars += r.addedValue ?? 0;
       existing.stores.add(r.storeId);
       existing.lines += 1;
       map.set(r.weekStart, existing);
@@ -35,16 +33,15 @@ export default function OrdersPage() {
       .sort((a, b) => b.weekStart.localeCompare(a.weekStart));
   }, [records]);
 
-  const currentWeekRecords = useMemo(
-    () => records.filter((r) => r.weekStart === currentWeek),
-    [records, currentWeek]
-  );
+  const currentWeekRecords = useMemo(() => records.filter((r) => r.weekStart === currentWeek), [records, currentWeek]);
+  const currentMonthRecords = useMemo(() => records.filter((r) => r.weekStart.startsWith(currentMonth)), [records, currentMonth]);
 
   const currentWeekCases = currentWeekRecords.reduce((sum, r) => sum + r.cases, 0);
-  const currentMonthCases = records
-    .filter((r) => r.weekStart.startsWith(currentMonth))
-    .reduce((sum, r) => sum + r.cases, 0);
+  const currentMonthCases = currentMonthRecords.reduce((sum, r) => sum + r.cases, 0);
+  const currentWeekDollars = currentWeekRecords.reduce((sum, r) => sum + (r.addedValue ?? 0), 0);
+  const currentMonthDollars = currentMonthRecords.reduce((sum, r) => sum + (r.addedValue ?? 0), 0);
   const currentWeekStores = new Set(currentWeekRecords.map((r) => r.storeId)).size;
+  const missingPriceLines = currentWeekRecords.filter((r) => r.casePrice === undefined).length;
 
   return (
     <main>
@@ -52,62 +49,37 @@ export default function OrdersPage() {
         <div>
           <div className="eyebrow">ORDER ADDITION ANALYSIS</div>
           <h1>Target Case Additions</h1>
-          <p>Track cases added to protect in-stock performance by week and month.</p>
+          <p>Track cases and incremental dollars added to protect Target in-stock performance.</p>
         </div>
         <Link className="navButton" href="/">Back to Store Dashboard</Link>
       </header>
 
       <section className="stats orderStats">
-        <div className="stat good">
-          <strong>{currentWeekCases}</strong>
-          <span>Cases Added This Week</span>
-          <small>Week of {currentWeek}</small>
-        </div>
-        <div className="stat warning">
-          <strong>{currentMonthCases}</strong>
-          <span>Cases Added This Month</span>
-          <small>{currentMonth}</small>
-        </div>
-        <div className="stat neutral">
-          <strong>{currentWeekStores}</strong>
-          <span>Stores With Adds</span>
-          <small>This week</small>
-        </div>
-        <div className="stat neutral">
-          <strong>{currentWeekRecords.length}</strong>
-          <span>Item Adds</span>
-          <small>This week</small>
-        </div>
+        <div className="stat good"><strong>{currentWeekCases}</strong><span>Cases Added This Week</span><small>Week of {currentWeek}</small></div>
+        <div className="stat good"><strong>{money.format(currentWeekDollars)}</strong><span>Dollars Added This Week</span><small>Known case prices</small></div>
+        <div className="stat warning"><strong>{currentMonthCases}</strong><span>Cases Added This Month</span><small>{currentMonth}</small></div>
+        <div className="stat warning"><strong>{money.format(currentMonthDollars)}</strong><span>Dollars Added This Month</span><small>{currentMonth}</small></div>
+        <div className="stat neutral"><strong>{currentWeekStores}</strong><span>Stores With Adds</span><small>This week</small></div>
+        <div className="stat neutral"><strong>{missingPriceLines}</strong><span>Adds Missing Price</span><small>Current week</small></div>
       </section>
 
       <section className="analysisSection">
-        <div className="sectionTitle">
-          <div>
-            <h2>Current Week Detail</h2>
-            <p>Every item with cases added for the current sales week.</p>
-          </div>
-        </div>
+        <div className="sectionTitle"><div><h2>Current Week Detail</h2><p>Every item with cases added for the current sales week.</p></div></div>
         <div className="tableWrap">
           <table>
-            <thead>
-              <tr>
-                <th>Store</th><th>City</th><th>Brand</th><th>Item</th><th>TCIN</th><th>Cases Added</th><th>Updated</th>
-              </tr>
-            </thead>
+            <thead><tr><th>Store</th><th>City</th><th>Brand</th><th>Item</th><th>TCIN</th><th>Cases Added</th><th>Case Price</th><th>Added $</th><th>Updated</th></tr></thead>
             <tbody>
               {currentWeekRecords.length === 0 ? (
-                <tr><td colSpan={7}>No case additions recorded for this week yet.</td></tr>
+                <tr><td colSpan={9}>No case additions recorded for this week yet.</td></tr>
               ) : (
                 [...currentWeekRecords]
-                  .sort((a, b) => b.cases - a.cases || a.storeName.localeCompare(b.storeName))
+                  .sort((a, b) => (b.addedValue ?? 0) - (a.addedValue ?? 0) || b.cases - a.cases || a.storeName.localeCompare(b.storeName))
                   .map((r) => (
                     <tr key={r.id}>
-                      <td>{r.storeName}</td>
-                      <td>{r.city}</td>
-                      <td>{r.brand}</td>
-                      <td>{r.product}</td>
-                      <td className="mono">{r.tcin}</td>
+                      <td>{r.storeName}</td><td>{r.city}</td><td>{r.brand}</td><td>{r.product}</td><td className="mono">{r.tcin}</td>
                       <td className="qty">{r.cases}</td>
+                      <td>{r.casePrice !== undefined ? money.format(r.casePrice) : <span className="missingPrice">Missing</span>}</td>
+                      <td className="moneyCell">{r.addedValue !== undefined ? money.format(r.addedValue) : '—'}</td>
                       <td>{new Date(r.updatedAt).toLocaleString()}</td>
                     </tr>
                   ))
@@ -118,26 +90,16 @@ export default function OrdersPage() {
       </section>
 
       <section className="analysisSection">
-        <div className="sectionTitle">
-          <div>
-            <h2>Weekly Trend</h2>
-            <p>Cases added across each tracked sales week.</p>
-          </div>
-        </div>
+        <div className="sectionTitle"><div><h2>Weekly Trend</h2><p>Cases and dollar value added across each tracked sales week.</p></div></div>
         <div className="tableWrap">
           <table>
-            <thead>
-              <tr><th>Week Starting</th><th>Cases Added</th><th>Stores</th><th>Item Adds</th></tr>
-            </thead>
+            <thead><tr><th>Week Starting</th><th>Cases Added</th><th>Added $</th><th>Stores</th><th>Item Adds</th></tr></thead>
             <tbody>
               {weeklyRows.length === 0 ? (
-                <tr><td colSpan={4}>No weekly history yet.</td></tr>
+                <tr><td colSpan={5}>No weekly history yet.</td></tr>
               ) : weeklyRows.map((r) => (
                 <tr key={r.weekStart}>
-                  <td>{r.weekStart}</td>
-                  <td className="qty">{r.cases}</td>
-                  <td>{r.stores}</td>
-                  <td>{r.lines}</td>
+                  <td>{r.weekStart}</td><td className="qty">{r.cases}</td><td className="moneyCell">{money.format(r.dollars)}</td><td>{r.stores}</td><td>{r.lines}</td>
                 </tr>
               ))}
             </tbody>
@@ -145,7 +107,7 @@ export default function OrdersPage() {
         </div>
       </section>
 
-      <footer>Case additions are saved in this browser for now. A shared cloud database can be added later so multiple users and devices contribute to one history.</footer>
+      <footer>Dollar totals use the discounted case price saved when the case addition is entered. Items without a loaded case price are clearly marked and excluded from dollar totals.</footer>
     </main>
   );
 }
