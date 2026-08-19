@@ -21,6 +21,11 @@ type Row = {
   error?: string;
 };
 
+const FORT_WORTH_REGION = new Set([
+  '1339','1368','1395','1514','1517','1536','1765','1766','1770','1836','2042','2243',
+  '0758','0876','1116','1531','1922','1962','1981','2008','2278','2334','2425','2754','2907','2935','2939'
+]);
+
 const initialRows: Row[] = stores.flatMap((store) =>
   products.map((product) => ({
     key: `${store.id}-${product.tcin}`,
@@ -40,6 +45,7 @@ const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD
 
 export default function Home() {
   const [rows, setRows] = useState(initialRows);
+  const [regionFilter, setRegionFilter] = useState('ALL');
   const [selectedStoreId, setSelectedStoreId] = useState(stores[0]?.id ?? '');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [brandFilter, setBrandFilter] = useState('ALL');
@@ -54,6 +60,11 @@ export default function Home() {
     }
     setCasesByKey(map);
   }, []);
+
+  const regionStores = useMemo(() => {
+    if (regionFilter === 'FORT_WORTH') return stores.filter((s) => FORT_WORTH_REGION.has(s.id));
+    return stores;
+  }, [regionFilter]);
 
   const selectedStore = stores.find((s) => s.id === selectedStoreId);
 
@@ -154,7 +165,7 @@ export default function Home() {
         <div>
           <div className="eyebrow">STORE-LEVEL INVENTORY ACTION</div>
           <h1>Target In-Stock Command Center</h1>
-          <p>Select one Target store, refresh it, then work the OOS and low inventory opportunities first.</p>
+          <p>Select a region, choose a Target store, refresh it, then work the OOS and low inventory opportunities first.</p>
         </div>
         <div className="headerActions">
           <Link className="navButton" href="/orders">Case Additions Dashboard</Link>
@@ -165,8 +176,18 @@ export default function Home() {
       </header>
 
       <section className="controls">
+        <select value={regionFilter} onChange={(e) => {
+          const region = e.target.value;
+          setRegionFilter(region);
+          const nextStores = region === 'FORT_WORTH' ? stores.filter((s) => FORT_WORTH_REGION.has(s.id)) : stores;
+          if (!nextStores.some((s) => s.id === selectedStoreId)) setSelectedStoreId(nextStores[0]?.id ?? '');
+          setStatusFilter('ALL');
+        }}>
+          <option value="ALL">All regions</option>
+          <option value="FORT_WORTH">Fort Worth Region</option>
+        </select>
         <select value={selectedStoreId} onChange={(e) => { setSelectedStoreId(e.target.value); setStatusFilter('ALL'); }}>
-          {stores.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.city}</option>)}
+          {regionStores.map((s) => <option key={s.id} value={s.id}>{s.name} — {s.city}</option>)}
         </select>
         <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}>
           <option value="ALL">All brands</option>
@@ -185,6 +206,7 @@ export default function Home() {
         <section className="storeCard">
           <div><strong>{selectedStore.name}</strong><span>{selectedStore.address}, {selectedStore.city}, {selectedStore.state}</span></div>
           <div><strong>Store ID {selectedStore.id}</strong><span>{products.length} tracked products</span></div>
+          <div><strong>Region</strong><span>{FORT_WORTH_REGION.has(selectedStore.id) ? 'Fort Worth' : 'Other / Unassigned'}</span></div>
           <div><strong>Delivery</strong><span>{selectedStore.deliveryDays?.length ? selectedStore.deliveryDays.join(' / ') : 'Not loaded'}</span></div>
           <div><strong>Cases Added</strong><span>{selectedStoreCases} this week</span></div>
           <div><strong>Added $</strong><span>{money.format(selectedStoreAddedValue)} this week</span></div>
