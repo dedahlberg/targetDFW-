@@ -146,8 +146,18 @@ export default function Home() {
 
       {selectedStore && (
         <section className="storeCard">
-          <div><strong>{selectedStore.name}</strong><span>{selectedStore.address}, {selectedStore.city}, {selectedStore.state}</span></div>
-          <div><strong>Store ID {selectedStore.id}</strong><span>{products.length} tracked products</span></div>
+          <div>
+            <strong>{selectedStore.name}</strong>
+            <span>{selectedStore.address}, {selectedStore.city}, {selectedStore.state}</span>
+          </div>
+          <div>
+            <strong>Store ID {selectedStore.id}</strong>
+            <span>{products.length} tracked products</span>
+          </div>
+          <div>
+            <strong>Delivery</strong>
+            <span>{selectedStore.deliveryDays?.length ? selectedStore.deliveryDays.join(' / ') : 'Not loaded'}</span>
+          </div>
         </section>
       )}
 
