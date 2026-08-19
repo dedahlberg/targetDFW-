@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { stores } from '@/data/stores';
+import { products } from '@/data/products';
 import { ADDITIONAL_REGION_STORES, FORT_WORTH_REGION_IDS, DALLAS_REGION_IDS, AUSTIN_REGION_IDS, SAN_ANTONIO_REGION_IDS, WEST_TEXAS_REGION_IDS, EAST_TEXAS_REGION_IDS, SOUTH_TEXAS_REGION_IDS, EAST_HOUSTON_REGION_IDS, WEST_HOUSTON_REGION_IDS } from '@/data/regions';
 import { getWeekStart, readOrderAdditions, type OrderAddition } from '@/lib/orderTracking';
-import { readInventorySnapshots, type StoreInventorySnapshot } from '@/lib/inventoryTracking';
+import { readInventorySnapshots, saveStoreInventorySnapshot, type StoreInventorySnapshot } from '@/lib/inventoryTracking';
 
 const allStores = [...stores, ...ADDITIONAL_REGION_STORES];
 const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
@@ -59,6 +60,8 @@ export default function RegionalDashboard() {
   const [region, setRegion] = useState('DALLAS');
   const [snapshots, setSnapshots] = useState<StoreInventorySnapshot[]>([]);
   const [orders, setOrders] = useState<OrderAddition[]>([]);
+  const [refreshingAll, setRefreshingAll] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState('');
 
   useEffect(() => {
     setSnapshots(readInventorySnapshots());
@@ -108,6 +111,55 @@ export default function RegionalDashboard() {
   const totalCases = weekOrders.reduce((sum, r) => sum + r.cases, 0);
   const totalDollars = weekOrders.reduce((sum, r) => sum + (r.addedValue ?? 0), 0);
 
+  async function refreshAllRegionStores() {
+    if (refreshingAll || regionStores.length === 0) return;
+    setRefreshingAll(true);
+
+    try {
+      for (let storeIndex = 0; storeIndex < regionStores.length; storeIndex++) {
+        const store = regionStores[storeIndex];
+        setRefreshProgress(`${storeIndex + 1} / ${regionStores.length} — ${store.name}`);
+        const rows: StoreInventorySnapshot['rows'] = [];
+
+        // Refresh in small batches so we move quickly without hammering Target with hundreds of requests at once.
+        for (let i = 0; i < products.length; i += 4) {
+          const batch = products.slice(i, i + 4);
+          const results = await Promise.all(batch.map(async (product) => {
+            try {
+              const q = new URLSearchParams({ tcin: product.tcin, storeId: store.id });
+              const res = await fetch(`/api/inventory?${q.toString()}`);
+              const data = await res.json();
+              return {
+                tcin: product.tcin,
+                quantity: data.quantity ?? null,
+                status: data.status ?? 'UNKNOWN',
+                availability: data.availability ?? 'UNKNOWN',
+              } as StoreInventorySnapshot['rows'][number];
+            } catch {
+              return {
+                tcin: product.tcin,
+                quantity: null,
+                status: 'UNKNOWN' as const,
+                availability: 'CLIENT_ERROR',
+              };
+            }
+          }));
+          rows.push(...results);
+        }
+
+        saveStoreInventorySnapshot({
+          storeId: store.id,
+          refreshedAt: new Date().toISOString(),
+          rows,
+        });
+        setSnapshots(readInventorySnapshots());
+      }
+      setRefreshProgress(`Complete — ${regionStores.length} stores refreshed`);
+    } finally {
+      setRefreshingAll(false);
+    }
+  }
+
   return (
     <main>
       <header>
@@ -123,9 +175,13 @@ export default function RegionalDashboard() {
       </header>
 
       <section className="controls">
-        <select value={region} onChange={(e) => setRegion(e.target.value)}>
+        <select value={region} disabled={refreshingAll} onChange={(e) => { setRegion(e.target.value); setRefreshProgress(''); }}>
           {Object.entries(REGION_LABELS).map(([key, label]) => <option key={key} value={key}>{label} Region</option>)}
         </select>
+        <button className="primary" onClick={refreshAllRegionStores} disabled={refreshingAll}>
+          {refreshingAll ? 'Refreshing Region…' : `Refresh All ${REGION_LABELS[region]} Stores`}
+        </button>
+        {refreshProgress && <span><strong>{refreshProgress}</strong></span>}
       </section>
 
       <section className="storeCard">
