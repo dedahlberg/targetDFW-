@@ -9,6 +9,8 @@ export type OrderAddition = {
   product: string;
   tcin: string;
   cases: number;
+  casePrice?: number;
+  addedValue?: number;
 };
 
 export const ORDER_STORAGE_KEY = 'targetdfw-order-additions-v1';
@@ -39,11 +41,14 @@ export function writeOrderAdditions(records: OrderAddition[]) {
   window.localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(records));
 }
 
-export function saveOrderAddition(input: Omit<OrderAddition, 'id' | 'weekStart' | 'updatedAt'>): OrderAddition[] {
+export function saveOrderAddition(
+  input: Omit<OrderAddition, 'id' | 'weekStart' | 'updatedAt' | 'addedValue'>
+): OrderAddition[] {
   const weekStart = getWeekStart();
   const current = readOrderAdditions();
   const id = `${weekStart}-${input.storeId}-${input.tcin}`;
   const withoutExisting = current.filter((r) => r.id !== id);
+  const addedValue = input.casePrice !== undefined ? Number((input.cases * input.casePrice).toFixed(2)) : undefined;
 
   const next = input.cases > 0
     ? [
@@ -53,6 +58,7 @@ export function saveOrderAddition(input: Omit<OrderAddition, 'id' | 'weekStart' 
           id,
           weekStart,
           updatedAt: new Date().toISOString(),
+          addedValue,
         },
       ]
     : withoutExisting;
