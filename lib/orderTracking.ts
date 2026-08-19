@@ -13,7 +13,9 @@ export type OrderAddition = {
   addedValue?: number;
 };
 
-export const ORDER_STORAGE_KEY = 'targetdfw-order-additions-v1';
+// v2 intentionally starts a fresh tracking ledger. The previous v1 browser data
+// was test/setup activity and should not carry into the live case-addition baseline.
+export const ORDER_STORAGE_KEY = 'targetdfw-order-additions-v2';
 
 export function getWeekStart(date = new Date()): string {
   const d = new Date(date);
