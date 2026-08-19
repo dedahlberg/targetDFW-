@@ -82,5 +82,15 @@ export const stores: Store[] = [
   { id: '2884', name: 'Target #2884', address: '401 Gates Pkwy', city: 'Prosper', state: 'TX' },
   { id: '2917', name: 'Target #2917', address: '2755 W University Dr Ste 1101', city: 'Denton', state: 'TX' },
   { id: '3292', name: 'Target #3292', address: '8335 Westchester Dr #200', city: 'Dallas', state: 'TX' },
-  { id: '7500', name: 'Target #7500', address: '26550 E University Dr', city: 'Aubrey', state: 'TX' }
+  {
+    id: '7500',
+    name: 'Target #7500',
+    address: '26550 E University Dr',
+    city: 'Aubrey',
+    state: 'TX',
+    zip: '76227',
+    latitude: 33.222563,
+    longitude: -96.9678864,
+    timezone: 'America/Chicago'
+  }
 ];
