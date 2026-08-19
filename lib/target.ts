@@ -388,7 +388,7 @@ async function getStoreContext(
         };
       }
     } catch {
-      // Try next location endpoint.
+      // Try the next store-location endpoint.
     }
   }
 
@@ -424,9 +424,14 @@ export async function fetchTargetInventory(
 
     const params = new URLSearchParams({
       auth: 'true',
+
       purchasable_store_ids: input.storeId,
-      scheduled_delivery_store_id: input.storeId,
+
+      scheduled_delivery_store_id:
+        input.storeId,
+
       store_id: input.storeId,
+
       tcin: input.tcin,
 
       timezone:
@@ -435,13 +440,19 @@ export async function fetchTargetInventory(
       country: 'US',
 
       sapphire_channel: 'WEB',
-      sapphire_page: `/p/-/A-${input.tcin}`,
+
+      sapphire_page:
+        `/p/-/A-${input.tcin}`,
 
       channel: 'WEB',
-      page: `/p/-/A-${input.tcin}`,
+
+      page:
+        `/p/-/A-${input.tcin}`,
 
       privacy_do_not_sell: 'false',
-      targeted_advertising_opt_out: 'false',
+
+      targeted_advertising_opt_out:
+        'false',
 
       device_type: 'desktop',
 
@@ -463,7 +474,10 @@ export async function fetchTargetInventory(
     }
 
     if (store.zip) {
-      params.set('zip', store.zip);
+      params.set(
+        'zip',
+        store.zip
+      );
 
       params.set(
         'scheduled_delivery_zip_code',
@@ -472,7 +486,10 @@ export async function fetchTargetInventory(
     }
 
     if (store.state) {
-      params.set('state', store.state);
+      params.set(
+        'state',
+        store.state
+      );
     }
 
     const url =
@@ -481,10 +498,19 @@ export async function fetchTargetInventory(
       `?${params.toString()}`;
 
     const response = await fetch(url, {
-      method: 'GET',
+      method: 'POST',
+
       headers: {
         accept: 'application/json',
-        'accept-language': 'en-US,en;q=0.9',
+
+        'accept-language':
+          'en-US,en;q=0.9',
+
+        'content-type':
+          'application/json',
+
+        origin:
+          'https://www.target.com',
 
         referer:
           `https://www.target.com/p/-/A-${input.tcin}`,
@@ -492,6 +518,9 @@ export async function fetchTargetInventory(
         'user-agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
       },
+
+      body: JSON.stringify({}),
+
       cache: 'no-store',
     });
 
@@ -527,7 +556,8 @@ export async function fetchTargetInventory(
         storeId: input.storeId,
         quantity: null,
         status: 'UNKNOWN',
-        availability: 'NO_INVENTORY_DATA',
+        availability:
+          'NO_INVENTORY_DATA',
         source: 'TARGET_PDP',
         fetchedAt,
         error:
@@ -538,14 +568,20 @@ export async function fetchTargetInventory(
     return {
       tcin: input.tcin,
       storeId: input.storeId,
-      quantity: fallback.quantity,
-      status: classify(
+      quantity:
         fallback.quantity,
-        fallback.availability
-      ),
+
+      status:
+        classify(
+          fallback.quantity,
+          fallback.availability
+        ),
+
       availability:
         fallback.availability,
+
       source: 'TARGET_PDP',
+
       fetchedAt,
     };
   } catch (error) {
@@ -557,6 +593,7 @@ export async function fetchTargetInventory(
       availability: 'API_ERROR',
       source: 'TARGET_PDP',
       fetchedAt,
+
       error:
         error instanceof Error
           ? error.message
