@@ -102,7 +102,7 @@ function numeric(value: unknown): number | null {
 function classify(quantity: number | null, availability: string): InventoryResult['status'] {
   const value = String(availability || '').toUpperCase();
   if (quantity !== null) { if (quantity <= 0) return 'OOS'; if (quantity <= 2) return 'LOW'; return 'HEALTHY'; }
-  if (value.includes('OUT_OF_STOCK') || value.includes('OUT OF STOCK') || value.includes('NOT_AVAILABLE') || value.includes('NOT AVAILABLE') || value.includes('UNAVAILABLE')) return 'OOS';
+  if (value.includes('OUT_OF_STOCK') || value.includes('OUT OF STOCK')) return 'OOS';
   return 'UNKNOWN';
 }
 
