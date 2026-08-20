@@ -13,13 +13,32 @@ export type StoreInventorySnapshot = {
 
 export const INVENTORY_STORAGE_KEY = 'targetdfw-inventory-snapshots-v1';
 
+export function isUnavailableInventory(row: Pick<InventorySnapshotRow, 'quantity' | 'availability'>) {
+  if (row.quantity !== null) return false;
+  const value = String(row.availability || '').toUpperCase();
+  return value.includes('UNAVAILABLE') ||
+    value.includes('NOT_AVAILABLE') ||
+    value.includes('NOT AVAILABLE') ||
+    value === 'NO_INVENTORY_DATA';
+}
+
+export function normalizedInventoryStatus(row: InventorySnapshotRow): InventorySnapshotRow['status'] {
+  return isUnavailableInventory(row) ? 'UNKNOWN' : row.status;
+}
+
 export function readInventorySnapshots(): StoreInventorySnapshot[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(INVENTORY_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((snapshot: StoreInventorySnapshot) => ({
+      ...snapshot,
+      rows: Array.isArray(snapshot.rows)
+        ? snapshot.rows.map((row) => ({ ...row, status: normalizedInventoryStatus(row) }))
+        : [],
+    }));
   } catch {
     return [];
   }
@@ -31,8 +50,12 @@ export function writeInventorySnapshots(records: StoreInventorySnapshot[]) {
 }
 
 export function saveStoreInventorySnapshot(snapshot: StoreInventorySnapshot): StoreInventorySnapshot[] {
+  const normalized: StoreInventorySnapshot = {
+    ...snapshot,
+    rows: snapshot.rows.map((row) => ({ ...row, status: normalizedInventoryStatus(row) })),
+  };
   const current = readInventorySnapshots();
-  const next = [snapshot, ...current.filter((r) => r.storeId !== snapshot.storeId)];
+  const next = [normalized, ...current.filter((r) => r.storeId !== normalized.storeId)];
   writeInventorySnapshots(next);
   return next;
 }
