@@ -27,4 +27,22 @@
   main:has(> .mobileHero) > footer {
     order: 5;
   }
+
+  .mobileHeroMetrics .mobileInStock.rateRed {
+    background: #ffe7e7;
+    border: 2px solid #c00000;
+    box-shadow: 0 4px 14px rgba(192, 0, 0, 0.14);
+  }
+
+  .mobileHeroMetrics .mobileInStock.rateYellow {
+    background: #fff6dc;
+    border: 2px solid #d7a400;
+    box-shadow: 0 4px 14px rgba(215, 164, 0, 0.12);
+  }
+
+  .mobileHeroMetrics .mobileInStock.rateGreen {
+    background: #e8f7ed;
+    border: 2px solid #26834a;
+    box-shadow: 0 4px 14px rgba(38, 131, 74, 0.12);
+  }
 }
