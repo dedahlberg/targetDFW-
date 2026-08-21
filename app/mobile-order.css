@@ -1,0 +1,30 @@
+@media (max-width: 640px) {
+  main:has(> .mobileHero) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  main:has(> .mobileHero) > header {
+    order: 0;
+  }
+
+  main:has(> .mobileHero) > .controls {
+    order: 1;
+  }
+
+  main:has(> .mobileHero) > .mobileHero {
+    order: 2;
+  }
+
+  main:has(> .mobileHero) > .stats {
+    order: 3;
+  }
+
+  main:has(> .mobileHero) > .tableWrap {
+    order: 4;
+  }
+
+  main:has(> .mobileHero) > footer {
+    order: 5;
+  }
+}
