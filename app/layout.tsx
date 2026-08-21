@@ -1,4 +1,5 @@
 import './styles.css';
+import './mobile-order.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
